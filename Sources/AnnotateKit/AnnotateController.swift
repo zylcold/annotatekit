@@ -779,6 +779,11 @@ final class AnnotateController {
         let output = outputDirectory()
         let latest = lastSend?.sessionID
         Task { [weak self] in
+            if let relay = RemoteRelay.fromLaunchArguments() {
+                await relay.pullStatuses(
+                    ids: SessionInbox.sessionIDs(in: output, since: SessionInbox.historyCutoffID()),
+                    into: output)
+            }
             let past = await Task.detached(priority: .utility) { () -> [PastSend] in
                 SessionInbox.sessionIDs(in: output, since: SessionInbox.historyCutoffID())
                     .filter { $0 != latest }
@@ -1618,6 +1623,11 @@ final class AnnotateController {
                 if elapsed > Self.deliveryTrackingLimit {
                     if self.delivery?.isFinal == false { self.delivery = nil }
                     return
+                }
+                // Relay mode: the agent's status arrives over the network, so fetch it into the
+                // same local file before reading — the readers below stay mode-agnostic.
+                if let relay = RemoteRelay.fromLaunchArguments() {
+                    await relay.pullStatuses(ids: [id], into: output)
                 }
                 // A file read and JSON decode, every second for up to an hour: off the main actor
                 let read = await Task.detached(priority: .utility) {

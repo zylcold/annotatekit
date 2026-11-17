@@ -109,6 +109,26 @@ public struct RemoteRelay: Sendable {
         }
     }
 
+    /// Relay back-channel: pulls each session's status.json from the relay into the local store,
+    /// so the notes sheet and the delivery pill see agent progress without a USB bridge. Sessions
+    /// whose bytes didn't change are left alone, keeping the poll cheap.
+    public func pullStatuses(ids: [String], into outputDirectory: URL) async {
+        for id in ids {
+            var request = URLRequest(url: baseURL.appendingPathComponent("v1/sessions/\(id)/status.json"))
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            request.timeoutInterval = 15
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200 else { continue }
+            let url = SessionInbox.sessionDirectory(id, in: outputDirectory)
+                .appendingPathComponent(SessionInbox.statusFile)
+            if (try? Data(contentsOf: url)) != data {
+                try? FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
     public func reportStatus(_ status: SessionStatus, sessionDirectory: URL) async {
         let id = sessionDirectory.lastPathComponent
         guard let data = try? JSONEncoder().encode(status) else { return }
