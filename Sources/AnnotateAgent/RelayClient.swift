@@ -45,6 +45,18 @@ public struct RelayClient: Sendable {
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
     }
 
+    /// Announces this agent to the app (the launcher dot): POST /v1/presence with a fresh stamp.
+    public func postPresence(agent: String, mode: String, via: String) async {
+        let payload: [String: Any] = [
+            "agent": agent,
+            "mode": mode,
+            "via": via,
+            "updatedAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        _ = try? await post("v1/presence", body: data)
+    }
+
     /// Mirrors complete remote bundles into `directory`; session.json marks completeness, matching
     /// the local writer, so SessionFeed picks them up unchanged.
     public func mirror(sessions ids: [String], into directory: URL, fileManager: FileManager = .default) async throws -> [String] {

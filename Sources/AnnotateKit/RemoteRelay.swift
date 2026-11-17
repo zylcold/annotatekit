@@ -57,6 +57,56 @@ public struct RemoteRelay: Sendable {
         }
     }
 
+    /// The relay's view of a listening agent (agent heartbeat). Decoded loosely: the relay augments
+    /// the agent's JSON with an ISO timestamp of its own.
+    public struct RemotePresence: Sendable {
+        public var agent: String?
+        public var mode: String?
+        public var via: String?
+        public var receivedAt: Date?
+    }
+
+    public func presence() async -> RemotePresence? {
+        var request = URLRequest(url: baseURL.appendingPathComponent("v1/presence"))
+        request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 8
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let formatter = ISO8601DateFormatter()
+        var presence = RemotePresence(
+            agent: object["agent"] as? String,
+            mode: object["mode"] as? String,
+            via: object["via"] as? String,
+            receivedAt: (object["receivedAt"] as? String).flatMap { formatter.date(from: $0) }
+        )
+        if presence.receivedAt == nil, let epoch = object["receivedAtEpoch"] as? Double {
+            presence.receivedAt = Date(timeIntervalSince1970: epoch)
+        }
+        return presence
+    }
+
+    /// Polls the relay and mirrors a live agent into the store's heartbeat file, so the launcher dot
+    /// logic works unchanged in relay mode.
+    public func bridgePresence(into storeDirectory: URL, interval: Duration = .seconds(5)) async {
+        while !Task.isCancelled {
+            if let presence = await presence(), let agent = presence.agent, let mode = presence.mode,
+               let received = presence.receivedAt, Date().timeIntervalSince(received) < 20 {
+                let payload: [String: Any] = [
+                    "agent": agent,
+                    "mode": mode,
+                    "via": presence.via ?? "relay",
+                    "updatedAt": Date().timeIntervalSince1970,
+                ]
+                if let data = try? JSONSerialization.data(withJSONObject: payload) {
+                    try? FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+                    try? data.write(to: storeDirectory.appendingPathComponent("agent.json"), options: .atomic)
+                }
+            }
+            try? await Task.sleep(for: interval)
+        }
+    }
+
     public func reportStatus(_ status: SessionStatus, sessionDirectory: URL) async {
         let id = sessionDirectory.lastPathComponent
         guard let data = try? JSONEncoder().encode(status) else { return }

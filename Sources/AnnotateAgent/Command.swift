@@ -36,6 +36,7 @@ public enum Command: Equatable, Sendable {
     case lanPull
     case remoteList(url: String?, key: String?)
     case remotePull(url: String?, key: String?)
+    case remoteWatch(url: String?, key: String?)
     case hookStop
     case help
 
@@ -72,6 +73,8 @@ public enum Command: Equatable, Sendable {
                                        then run watch/mcp on that directory as usual
           annotate remote list          list sessions on a relay (--url, --key / ANNOTATE_RELAY_*)
           annotate remote pull          mirror sessions from a relay into --dir
+          annotate remote watch         stay connected: heartbeat + poll the relay, printing new
+                                       sessions as they arrive (like watch, but over the internet)
           annotate list                recent sessions and their status
           annotate hook stop           Claude Code Stop hook: keeps Claude from stopping while a Send it
                                        worked on still shows as in progress on the device
@@ -184,6 +187,9 @@ public enum Command: Equatable, Sendable {
             case "pull":
                 try expectEmpty(Array(remaining.dropFirst()))
                 return Invocation(command: .remotePull(url: url, key: key), directory: directory)
+            case "watch":
+                try expectEmpty(Array(remaining.dropFirst()))
+                return Invocation(command: .remoteWatch(url: url, key: key), directory: directory)
             default:
                 throw ParseError.missingArguments("annotate remote <list|pull> --url URL --key KEY")
             }
@@ -372,6 +378,26 @@ public enum Command: Equatable, Sendable {
             } catch {
                 writeLine("remote list failed: \(error)")
                 return 1
+            }
+
+        case let .remoteWatch(url, key):
+            guard let client = RelayClient(url: url ?? "", key: key ?? "") else {
+                writeLine("remote needs --url and --key (or ANNOTATE_RELAY_URL / ANNOTATE_RELAY_KEY)")
+                return 1
+            }
+            try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+            writeLine("watching relay \(client.baseURL.absoluteString); Ctrl-C to stop")
+            var seen = Set<String>()
+            while true {
+                await client.postPresence(agent: "annotate", mode: "push", via: "remote")
+                if let ids = try? await client.sessionIDs() {
+                    for id in ids.reversed() where !seen.contains(id) {
+                        seen.insert(id)
+                        writeLine("session \(id)")
+                        _ = try? await client.mirror(sessions: [id], into: output)
+                    }
+                }
+                try? await Task.sleep(for: .seconds(5))
             }
 
         case let .remotePull(url, key):

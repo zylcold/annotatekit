@@ -63,6 +63,7 @@ const prune = async () => {
     const entries = await readdir(DIR);
     const now = Date.now();
     for (const id of entries) {
+      if (!safeId(id)) continue;
       const path = sessionDir(id);
       const info = await stat(path);
       if (now - info.mtimeMs > MAX_AGE_MS) await rm(path, { recursive: true, force: true });
@@ -77,6 +78,24 @@ const server = createServer(async (req, res) => {
   if (parts[0] === "health") return send(res, 200, { ok: true });
 
   if (!authorized(req)) return send(res, 401, { error: "unauthorized" });
+
+  // Presence: the agent posts a heartbeat while it listens; the app reads it to show "connected".
+  if (parts[0] === "v1" && parts[1] === "presence") {
+    if (req.method === "POST") {
+      const payload = JSON.parse((await body(req, 64 * 1024)).toString("utf8"));
+      await mkdir(DIR, { recursive: true });
+      await writeFile(join(DIR, "presence.json"), JSON.stringify({ ...payload, receivedAt: new Date().toISOString() }));
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === "GET") {
+      try {
+        return send(res, 200, await readFile(join(DIR, "presence.json")));
+      } catch {
+        return send(res, 200, {});
+      }
+    }
+    return send(res, 405, { error: "method not allowed" });
+  }
 
   try {
     if (parts[0] !== "v1" || parts[1] !== "sessions") return send(res, 404, { error: "not found" });
