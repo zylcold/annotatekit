@@ -1796,7 +1796,7 @@ final class AnnotateController {
         return root
     }
 
-    private func outputDirectory() -> URL {
+    func outputDirectory() -> URL {
         if let custom = options.outputDirectory { return custom }
         if let root = projectRoot, FileManager.default.isWritableFile(atPath: root.path) {
             return root.appendingPathComponent(".annotate", isDirectory: true)
