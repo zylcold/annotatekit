@@ -34,6 +34,8 @@ public enum Command: Equatable, Sendable {
     case list
     case lanList
     case lanPull
+    case remoteList(url: String?, key: String?)
+    case remotePull(url: String?, key: String?)
     case hookStop
     case help
 
@@ -68,6 +70,8 @@ public enum Command: Equatable, Sendable {
           annotate lan list             AnnotateKit services found on the LAN (Bonjour)
           annotate lan pull             mirror new sessions from the first service into --dir,
                                        then run watch/mcp on that directory as usual
+          annotate remote list          list sessions on a relay (--url, --key / ANNOTATE_RELAY_*)
+          annotate remote pull          mirror sessions from a relay into --dir
           annotate list                recent sessions and their status
           annotate hook stop           Claude Code Stop hook: keeps Claude from stopping while a Send it
                                        worked on still shows as in progress on the device
@@ -161,6 +165,28 @@ public enum Command: Equatable, Sendable {
         case "list":
             try expectEmpty(rest)
             return Invocation(command: .list, directory: directory)
+        case "remote":
+            var url = ProcessInfo.processInfo.environment["ANNOTATE_RELAY_URL"]
+            var key = ProcessInfo.processInfo.environment["ANNOTATE_RELAY_KEY"]
+            var remaining = rest
+            if let flag = remaining.firstIndex(of: "--url"), flag + 1 < remaining.count {
+                url = remaining[flag + 1]
+                remaining.removeSubrange(flag...flag + 1)
+            }
+            if let flag = remaining.firstIndex(of: "--key"), flag + 1 < remaining.count {
+                key = remaining[flag + 1]
+                remaining.removeSubrange(flag...flag + 1)
+            }
+            switch remaining.first {
+            case "list":
+                try expectEmpty(Array(remaining.dropFirst()))
+                return Invocation(command: .remoteList(url: url, key: key), directory: directory)
+            case "pull":
+                try expectEmpty(Array(remaining.dropFirst()))
+                return Invocation(command: .remotePull(url: url, key: key), directory: directory)
+            default:
+                throw ParseError.missingArguments("annotate remote <list|pull> --url URL --key KEY")
+            }
         case "lan":
             switch rest.first {
             case "list":
@@ -333,6 +359,36 @@ public enum Command: Equatable, Sendable {
                 writeLine("\(service.name)  \(service.host):\(service.port)")
             }
             return 0
+
+        case let .remoteList(url, key):
+            guard let client = RelayClient(url: url ?? "", key: key ?? "") else {
+                writeLine("remote needs --url and --key (or ANNOTATE_RELAY_URL / ANNOTATE_RELAY_KEY)")
+                return 1
+            }
+            do {
+                let ids = try await client.sessionIDs()
+                writeLine(ids.isEmpty ? "No sessions on relay" : ids.joined(separator: "\n"))
+                return 0
+            } catch {
+                writeLine("remote list failed: \(error)")
+                return 1
+            }
+
+        case let .remotePull(url, key):
+            guard let client = RelayClient(url: url ?? "", key: key ?? "") else {
+                writeLine("remote needs --url and --key (or ANNOTATE_RELAY_URL / ANNOTATE_RELAY_KEY)")
+                return 1
+            }
+            do {
+                try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+                let ids = try await client.sessionIDs()
+                let pulled = try await client.mirror(sessions: ids, into: output)
+                writeLine("Pulled \(pulled.count) session(s) from relay into \(output.path)")
+                return 0
+            } catch {
+                writeLine("remote pull failed: \(error)")
+                return 1
+            }
 
         case .lanPull:
             guard let service = await LanDiscovery.browse().first else {
