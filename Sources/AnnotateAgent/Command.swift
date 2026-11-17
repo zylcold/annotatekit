@@ -388,6 +388,8 @@ public enum Command: Equatable, Sendable {
             try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             writeLine("watching relay \(client.baseURL.absoluteString); Ctrl-C to stop")
             var seen = Set<String>()
+            // status.json bytes last pushed per session, so only changes travel
+            var forwarded: [String: Data] = [:]
             while true {
                 await client.postPresence(agent: "annotate", mode: "push", via: "remote")
                 if let ids = try? await client.sessionIDs() {
@@ -395,6 +397,18 @@ public enum Command: Equatable, Sendable {
                         seen.insert(id)
                         writeLine("session \(id)")
                         _ = try? await client.mirror(sessions: [id], into: output)
+                    }
+                }
+                // Back-channel: local status changes (annotate status/resolve run elsewhere) go to
+                // the relay, which the app polls. Next tick retries what failed.
+                for id in seen.sorted() {
+                    let file = output
+                        .appendingPathComponent(SessionWriter.sessionsFolder, isDirectory: true)
+                        .appendingPathComponent(id, isDirectory: true)
+                        .appendingPathComponent(SessionInbox.statusFile)
+                    guard let data = try? Data(contentsOf: file), forwarded[id] != data else { continue }
+                    if (try? await client.post("v1/sessions/\(id)/status.json", body: data)) != nil {
+                        forwarded[id] = data
                     }
                 }
                 try? await Task.sleep(for: .seconds(5))
