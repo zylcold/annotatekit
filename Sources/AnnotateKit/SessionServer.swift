@@ -4,8 +4,11 @@
 // local-file and developer-connection paths stay as they are.
 // ponytail: single-client HTTP/1.1, no TLS — LAN debug traffic only; upgrade to a framed protocol
 // if this ever leaves DEBUG.
+// Compiled in every configuration because Swift packages are often built without -DDEBUG (Xcode
+// doesn't pass the app's DEBUG define down to package targets); only `OverlayInstaller`'s DEBUG-only
+// install path ever starts it, so Release builds ship the code but never open a socket.
 
-#if DEBUG && canImport(Network)
+#if canImport(Network)
 import AnnotateCore
 import Foundation
 import Network
