@@ -28,6 +28,9 @@ final class OverlayInstaller {
         isInstalled = true
         controller.configure(options: options, callerFile: callerFile)
         observeActivation()
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? Bundle.main.bundleURL.lastPathComponent
+        SessionServer.shared.start(storeDirectory: controller.outputDirectory(), appName: appName)
         // A window outlives a scene the system discards and replaces (seen on a device after a launch
         // while it was locked): the pill then lived on a dead scene and never showed. Re-attach.
         disconnectObserver = NotificationCenter.default.addObserver(
