@@ -32,6 +32,8 @@ public enum Command: Equatable, Sendable {
     case dismiss(sessionID: String, pin: Int, reason: String?)
     case ask(sessionID: String, pin: Int, question: String, wait: Double)
     case list
+    case lanList
+    case lanPull
     case hookStop
     case help
 
@@ -63,6 +65,9 @@ public enum Command: Equatable, Sendable {
           annotate ask <id|latest> <pin> <question> [--wait <seconds>]
                                        ask the user about one pin and wait for the reply (default 120s);
                                        prints it and exits 0, or exits 3 when none arrives in time
+          annotate lan list             AnnotateKit services found on the LAN (Bonjour)
+          annotate lan pull             mirror new sessions from the first service into --dir,
+                                       then run watch/mcp on that directory as usual
           annotate list                recent sessions and their status
           annotate hook stop           Claude Code Stop hook: keeps Claude from stopping while a Send it
                                        worked on still shows as in progress on the device
@@ -156,6 +161,17 @@ public enum Command: Equatable, Sendable {
         case "list":
             try expectEmpty(rest)
             return Invocation(command: .list, directory: directory)
+        case "lan":
+            switch rest.first {
+            case "list":
+                try expectEmpty(Array(rest.dropFirst()))
+                return Invocation(command: .lanList, directory: directory)
+            case "pull":
+                try expectEmpty(Array(rest.dropFirst()))
+                return Invocation(command: .lanPull, directory: directory)
+            default:
+                throw ParseError.missingArguments("annotate lan <list|pull>")
+            }
         case "hook":
             guard rest == ["stop"] else { throw ParseError.missingArguments("annotate hook stop") }
             return Invocation(command: .hookStop, directory: directory)
@@ -309,6 +325,31 @@ public enum Command: Equatable, Sendable {
                 writeLine("\(id)  \(state?.state.rawValue ?? "pending")\(state?.message.map { "  \($0)" } ?? "")")
             }
             return 0
+
+        case .lanList:
+            let services = await LanDiscovery.browse()
+            if services.isEmpty { writeLine("No AnnotateKit services on the LAN") }
+            for service in services {
+                writeLine("\(service.name)  \(service.host):\(service.port)")
+            }
+            return 0
+
+        case .lanPull:
+            guard let service = await LanDiscovery.browse().first else {
+                writeLine("No AnnotateKit service on the LAN")
+                return 1
+            }
+            let client = LanSessionClient(service: service)
+            do {
+                try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+                let ids = try await client.sessionIDs()
+                let pulled = try await client.mirror(sessions: ids, into: output)
+                writeLine("Pulled \(pulled.count) session(s) from \(service.name) into \(output.path)")
+                return 0
+            } catch {
+                writeLine("lan pull failed: \(error)")
+                return 1
+            }
         }
     }
 
