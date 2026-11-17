@@ -106,12 +106,20 @@ public struct LanSessionClient: Sendable {
         self.session = URLSession(configuration: .ephemeral)
     }
 
-    private func url(_ path: String) -> URL {
-        URL(string: "http://\(service.host):\(service.port)\(path)")!
+    /// Bonjour hosts arrive scoped ("fe80::1%en0") and IPv6 needs brackets; URL(string:) rejects
+    /// both, so normalize instead of force-unwrapping.
+    private func url(_ path: String) throws -> URL {
+        var host = service.host
+        if let zone = host.firstIndex(of: "%") { host = String(host[..<zone]) }
+        let formatted = host.contains(":") ? "[" + host + "]" : host
+        guard let url = URL(string: "http://" + formatted + ":" + String(service.port) + path) else {
+            throw URLError(.badURL)
+        }
+        return url
     }
 
     public func health() async throws -> Bool {
-        let (data, response) = try await session.data(from: url("/health"))
+        let (data, response) = try await session.data(from: try url("/health"))
         return (response as? HTTPURLResponse)?.statusCode == 200 && !data.isEmpty
     }
 
@@ -120,12 +128,12 @@ public struct LanSessionClient: Sendable {
     }
 
     public func sessionIDs() async throws -> [String] {
-        let (data, _) = try await session.data(from: url("/sessions"))
+        let (data, _) = try await session.data(from: try url("/sessions"))
         return try JSONDecoder().decode(RemoteSession.self, from: data).sessions
     }
 
     public func get(_ path: String) async throws -> Data {
-        let (data, response) = try await session.data(from: url(path))
+        let (data, response) = try await session.data(from: try url(path))
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
@@ -133,7 +141,7 @@ public struct LanSessionClient: Sendable {
     }
 
     public func post(_ path: String, body: Data) async throws {
-        var request = URLRequest(url: url(path))
+        var request = URLRequest(url: try url(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
