@@ -74,11 +74,13 @@ public struct RemoteRelay: Sendable {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
         var presence = RemotePresence(
             agent: object["agent"] as? String,
             mode: object["mode"] as? String,
             via: object["via"] as? String,
-            receivedAt: (object["receivedAt"] as? String).flatMap { formatter.date(from: $0) }
+            receivedAt: (object["receivedAt"] as? String).flatMap { formatter.date(from: $0) ?? plain.date(from: $0) }
         )
         if presence.receivedAt == nil, let epoch = object["receivedAtEpoch"] as? Double {
             presence.receivedAt = Date(timeIntervalSince1970: epoch)
