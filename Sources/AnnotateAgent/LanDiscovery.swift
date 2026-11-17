@@ -110,8 +110,14 @@ public struct LanSessionClient: Sendable {
     /// both, so normalize instead of force-unwrapping.
     private func url(_ path: String) throws -> URL {
         var host = service.host
-        if let zone = host.firstIndex(of: "%") { host = String(host[..<zone]) }
-        let formatted = host.contains(":") ? "[" + host + "]" : host
+        var zone = ""
+        if let index = host.firstIndex(of: "%") {
+            zone = String(host[index...])          // "%en0"
+            host = String(host[..<index])
+        }
+        // Link-local IPv6 needs the interface zone; a URL carries it percent-encoded.
+        let scoped = host + (zone.isEmpty ? "" : "%25" + zone.dropFirst())
+        let formatted = host.contains(":") ? "[" + scoped + "]" : host
         guard let url = URL(string: "http://" + formatted + ":" + String(service.port) + path) else {
             throw URLError(.badURL)
         }
