@@ -149,7 +149,15 @@ public struct RemoteRelay: Sendable {
         for case let fileURL as URL in enumerator {
             let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
             guard values?.isRegularFile == true else { continue }
-            let relative = fileURL.path.replacingOccurrences(of: directory.path + "/", with: "")
+            // 真机沙盒路径带 /private 前缀（firmlink），enumerator 给的和传入目录的拼写可能不一致；
+            // 用最长匹配剥前缀，剥不掉就跳过该文件，绝不把绝对路径发给 relay。
+            let path = fileURL.path
+            let bases = [directory.path, directory.standardizedFileURL.path]
+            guard let base = bases
+                .filter({ path.hasPrefix($0 + "/") })
+                .max(by: { $0.count < $1.count })
+            else { continue }
+            let relative = String(path.dropFirst(base.count + 1))
             guard relative != "status.json", let data = try? Data(contentsOf: fileURL) else { continue }
             result[relative] = data
         }
