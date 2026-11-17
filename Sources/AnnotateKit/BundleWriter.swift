@@ -116,6 +116,11 @@ extension BundleRenderer {
         } catch {
             return SendOutcome(prompt: prompt, pinCount: annotations.count, error: error.localizedDescription)
         }
+        // Remote delivery is additive: when the app was launched with a relay URL + key, the same
+        // bundle also goes to the internet so an agent on another network can pick it up.
+        if let relay = RemoteRelay.fromLaunchArguments() {
+            Task { try? await relay.upload(sessionDirectory: sessionDirectory) }
+        }
         SessionInbox.prune(keeping: max(job.keepSessions, 1), in: job.outputDirectory)
         return SendOutcome(prompt: prompt, pinCount: annotations.count, error: nil)
     }
