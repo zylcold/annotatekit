@@ -9,7 +9,7 @@
 // empty state. Row copy comes from `PinResult`
 // and `PinOutcome` in AnnotateCore.
 
-#if canImport(UIKit)
+#if DEBUG && canImport(UIKit)
 #if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
 #endif

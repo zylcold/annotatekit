@@ -73,14 +73,14 @@ public enum Annotate {
     /// Call once at launch, e.g. in your `App.init()`. Safe to call in Release (does nothing).
     /// - Parameter file: leave the default — the call site's path locates your project root.
     public static func install(_ options: AnnotateOptions = AnnotateOptions(), file: String = #filePath) {
-        #if canImport(UIKit)
+        #if DEBUG && canImport(UIKit)
         OverlayInstaller.shared.install(options: options, callerFile: file)
         #endif
     }
 
     /// Enters annotate mode.
     public static func start() {
-        #if canImport(UIKit)
+        #if DEBUG && canImport(UIKit)
         OverlayInstaller.shared.ensureAttached()
         OverlayInstaller.shared.controller.start()
         #endif
@@ -88,7 +88,7 @@ public enum Annotate {
 
     /// Leaves annotate mode, keeping unsent annotations.
     public static func stop() {
-        #if canImport(UIKit)
+        #if DEBUG && canImport(UIKit)
         OverlayInstaller.shared.controller.stop()
         #endif
     }
@@ -98,7 +98,7 @@ public enum Annotate {
     }
 
     public static var isActive: Bool {
-        #if canImport(UIKit)
+        #if DEBUG && canImport(UIKit)
         OverlayInstaller.shared.controller.isActive
         #else
         false

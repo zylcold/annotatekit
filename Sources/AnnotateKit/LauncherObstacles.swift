@@ -6,7 +6,7 @@
 // Runs on the main thread every few seconds while the launcher idles, so it walks views only: the
 // accessibility tree stays off until annotate mode. Frames come back in the overlay's coordinates.
 
-#if canImport(UIKit)
+#if DEBUG && canImport(UIKit)
 import UIKit
 
 @MainActor

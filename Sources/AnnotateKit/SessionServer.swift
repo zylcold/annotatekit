@@ -8,7 +8,7 @@
 // doesn't pass the app's DEBUG define down to package targets); only `OverlayInstaller`'s DEBUG-only
 // install path ever starts it, so Release builds ship the code but never open a socket.
 
-#if canImport(Network)
+#if DEBUG && canImport(Network)
 import AnnotateCore
 import Foundation
 import Network
