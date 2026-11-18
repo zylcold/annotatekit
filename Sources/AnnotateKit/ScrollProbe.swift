@@ -1,4 +1,4 @@
-#if (DEBUG || ANNOTATE_ENABLED) && canImport(UIKit)
+#if canImport(UIKit)
 import UIKit
 
 /// Finds the scroll view the user would scroll: the one under the middle of the screen in the
