@@ -8,7 +8,7 @@
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
-#if canImport(UIKit)
+#if DEBUG && canImport(UIKit)
 import UIKit
 #endif
 
@@ -17,7 +17,7 @@ extension View {
     /// Keeps the AnnotateKit launcher pill off this view while it idles: the pill lifts above it, or
     /// moves to a side, when the view sits where the pill docks.
     public func annotateAvoid() -> some View {
-        #if canImport(UIKit)
+        #if DEBUG && canImport(UIKit)
         modifier(AnnotateAvoidModifier())
         #else
         self
@@ -26,7 +26,7 @@ extension View {
 }
 #endif
 
-#if canImport(UIKit)
+#if DEBUG && canImport(UIKit)
 /// Screen frames of the views tagged `.annotateAvoid()`, read on each launcher re-check.
 @MainActor
 final class AvoidRegistry {
