@@ -32,13 +32,16 @@ const NOTIFY_MENTION_ID = process.env.ANNOTATE_NOTIFY_MENTION_ID ?? "";
 const NOTIFY_MENTION_NAME = process.env.ANNOTATE_NOTIFY_MENTION_NAME ?? "";
 
 // ponytail: fire-and-forget，失败只打日志，不影响上传主流程
-const notifyNewSession = async (id, fileCount) => {
+const notifyNewSession = async (id, fileCount, appName) => {
   if (!NOTIFY_WEBHOOK) return;
   const paragraphs = [];
   if (NOTIFY_MENTION_ID) {
     paragraphs.push([{ tag: "at", user_id: NOTIFY_MENTION_ID, user_name: NOTIFY_MENTION_NAME || "dick" }]);
   }
-  paragraphs.push([{ tag: "text", text: "标注系统有更新，请及时处理（session " + id + "，" + fileCount + " 个文件）" }]);
+  const who = appName ? "「" + appName + "」" : "";
+  paragraphs.push([
+    { tag: "text", text: who + "标注系统有更新，请及时处理（session " + id + "，" + fileCount + " 个文件）" },
+  ]);
   try {
     const res = await fetch(NOTIFY_WEBHOOK, {
       method: "POST",
@@ -162,7 +165,13 @@ const server = createServer(async (req, res) => {
           await mkdir(join(file, ".."), { recursive: true });
           await writeFile(file, Buffer.from(b64, "base64"));
         }
-        await notifyNewSession(payload.id, entries.length);
+        // 从刚落盘的 session.json 取 app 名，通知里说清楚是哪个 App 的标注
+        let appName = payload.appName;
+        try {
+          const meta = JSON.parse(await readFile(join(target, "session.json"), "utf8"));
+          appName = meta?.app?.name || appName;
+        } catch {}
+        await notifyNewSession(payload.id, entries.length, appName);
         return send(res, 200, { ok: true, id: payload.id });
       }
       return send(res, 405, { error: "method not allowed" });
