@@ -50,11 +50,40 @@ public struct RemoteRelay: Sendable {
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "files": files])
-        request.timeoutInterval = 30
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        request.timeoutInterval = 60
+        // 真机上大 bundle（截图 base64 后十几 MB）经隧道上传可能超时/断流，重试三次；
+        // 4xx 是永久失败（路径/鉴权），不重试。失败写 upload-errors.json 便于排查。
+        var lastError: Error = URLError(.badServerResponse)
+        for attempt in 1...3 {
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+                if (200..<300).contains(http.statusCode) { return }
+                Self.logUploadError(id: id, attempt: attempt, status: http.statusCode, error: nil, in: sessionDirectory.deletingLastPathComponent())
+                lastError = URLError(.badServerResponse)
+                // 4xx（路径/鉴权）重试也不会好；调用方本就 try?，记日志后收口
+                if (400..<500).contains(http.statusCode) { return }
+            } catch {
+                lastError = error
+                Self.logUploadError(id: id, attempt: attempt, status: nil, error: String(describing: error), in: sessionDirectory.deletingLastPathComponent())
+            }
+            if attempt < 3 { try? await Task.sleep(for: .seconds(5)) }
         }
+        throw lastError
+    }
+
+    /// 追加一行 JSON 到 sessions/upload-errors.json（不进任何 session 目录，不会被再上传）。
+    private static func logUploadError(id: String, attempt: Int, status: Int?, error: String?, in sessionsDirectory: URL) {
+        let line = (try? JSONSerialization.data(withJSONObject: [
+            "id": id, "attempt": attempt, "status": status ?? NSNull(),
+            "error": error ?? NSNull(), "at": Date().timeIntervalSince1970,
+        ])) ?? Data()
+        let url = sessionsDirectory.appendingPathComponent("upload-errors.json")
+        var merged = (try? Data(contentsOf: url)) ?? Data()
+        if !merged.isEmpty, merged.last != 0x0A { merged.append(0x0A) }
+        merged.append(line)
+        merged.append(0x0A)
+        try? merged.write(to: url, options: .atomic)
     }
 
     /// The relay's view of a listening agent (agent heartbeat). Decoded loosely: the relay augments
