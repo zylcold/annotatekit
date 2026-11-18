@@ -46,7 +46,7 @@
 // Idle cost is near zero: the accessibility tree and `.annotatable()` frame tracking switch on
 // only while annotating, and the text outline is scanned once the tree is warm.
 
-#if (DEBUG || ANNOTATE_ENABLED) && canImport(UIKit)
+#if canImport(UIKit)
 #if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
 #endif

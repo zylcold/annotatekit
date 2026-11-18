@@ -3,7 +3,7 @@
 // active; without this, taps on un-annotated SwiftUI content only find the hosting view.
 // Resolved with dlsym at runtime and compiled only in DEBUG, so no private symbol is linked.
 
-#if (DEBUG || ANNOTATE_ENABLED) && canImport(UIKit)
+#if canImport(UIKit)
 import Darwin
 import Foundation
 
