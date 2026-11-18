@@ -2,10 +2,9 @@
 // SDK < 53 templates ship `AppDelegate.mm`), which can't call `Annotate.install(_:file:)`: it's a
 // static on a Swift enum and its `file:` default is a Swift `#filePath`.
 // Public: AnnotateBridge.install(file:) — ObjC `[AnnotateBridge installWithFile:@__FILE__];`
-// Exists in every configuration like the rest of the public API (a no-op in Release, because
-// `Annotate.install` is); compiled out where there's no ObjC runtime.
+// DEBUG-only, same as Annotate.install; compiled out where there's no ObjC runtime.
 
-#if canImport(ObjectiveC)
+#if DEBUG && canImport(ObjectiveC)
 #if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
 #endif
