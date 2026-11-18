@@ -24,6 +24,26 @@ const HOST = arg("host", "127.0.0.1");
 const DIR = arg("dir", process.env.ANNOTATE_RELAY_DIR ?? "/tmp/annotate-relay");
 const KEY = arg("key", process.env.ANNOTATE_RELAY_KEY ?? "");
 const MAX_AGE_MS = Number(arg("max-age-hours", 72)) * 3600_000;
+// 新 note 到达时的外部提醒（如飞书自定义机器人 webhook）。留空则不提醒。
+const NOTIFY_WEBHOOK = process.env.ANNOTATE_NOTIFY_WEBHOOK ?? "";
+
+// ponytail: fire-and-forget，失败只打日志，不影响上传主流程
+const notifyNewSession = async (id, fileCount) => {
+  if (!NOTIFY_WEBHOOK) return;
+  try {
+    const res = await fetch(NOTIFY_WEBHOOK, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        msg_type: "text",
+        content: { text: "标注系统有更新，请及时处理（session " + id + "，" + fileCount + " 个文件）" },
+      }),
+    });
+    console.log(new Date().toISOString(), "notify", id, res.status);
+  } catch (error) {
+    console.log(new Date().toISOString(), "notify failed", id, String(error));
+  }
+};
 
 if (!KEY || KEY.length < 16) {
   console.error("annotate-relay: --key (>=16 chars) or ANNOTATE_RELAY_KEY is required");
@@ -123,13 +143,15 @@ const server = createServer(async (req, res) => {
         }
         const target = sessionDir(payload.id);
         await mkdir(target, { recursive: true });
-        for (const [rel, b64] of Object.entries(payload.files)) {
+        const entries = Object.entries(payload.files);
+        for (const [rel, b64] of entries) {
           if (!safeRel(rel)) return send(res, 400, { error: "bad path " + rel });
           const file = join(target, normalize(rel));
           if (!file.startsWith(target + sep)) return send(res, 400, { error: "bad path " + rel });
           await mkdir(join(file, ".."), { recursive: true });
           await writeFile(file, Buffer.from(b64, "base64"));
         }
+        await notifyNewSession(payload.id, entries.length);
         return send(res, 200, { ok: true, id: payload.id });
       }
       return send(res, 405, { error: "method not allowed" });
