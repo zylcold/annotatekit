@@ -2,7 +2,7 @@
 // Release, but only DEBUG builds on UIKit platforms install the overlay; elsewhere these are no-ops.
 // Public: Annotate.install(_:file:), start(), stop(), toggle(), isActive; AnnotateOptions; PromptDetail
 
-#if DEBUG && canImport(UIKit)
+#if DEBUG
 
 #if canImport(AnnotateCore) // the CocoaPods build compiles AnnotateCore into this module
 import AnnotateCore
