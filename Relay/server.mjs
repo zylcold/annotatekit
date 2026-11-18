@@ -27,16 +27,27 @@ const MAX_AGE_MS = Number(arg("max-age-hours", 72)) * 3600_000;
 // 新 note 到达时的外部提醒（如飞书自定义机器人 webhook）。留空则不提醒。
 const NOTIFY_WEBHOOK = process.env.ANNOTATE_NOTIFY_WEBHOOK ?? "";
 
+// 提醒里 @ 的目标（飞书 open_id + 显示名），与格物反馈同款富文本格式；留空则不 @。
+const NOTIFY_MENTION_ID = process.env.ANNOTATE_NOTIFY_MENTION_ID ?? "";
+const NOTIFY_MENTION_NAME = process.env.ANNOTATE_NOTIFY_MENTION_NAME ?? "";
+
 // ponytail: fire-and-forget，失败只打日志，不影响上传主流程
 const notifyNewSession = async (id, fileCount) => {
   if (!NOTIFY_WEBHOOK) return;
+  const paragraphs = [];
+  if (NOTIFY_MENTION_ID) {
+    paragraphs.push([{ tag: "at", user_id: NOTIFY_MENTION_ID, user_name: NOTIFY_MENTION_NAME || "dick" }]);
+  }
+  paragraphs.push([{ tag: "text", text: "标注系统有更新，请及时处理（session " + id + "，" + fileCount + " 个文件）" }]);
   try {
     const res = await fetch(NOTIFY_WEBHOOK, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        msg_type: "text",
-        content: { text: "标注系统有更新，请及时处理（session " + id + "，" + fileCount + " 个文件）" },
+        msg_type: "post",
+        content: {
+          post: { zh_cn: { title: "标注系统更新", content: paragraphs } },
+        },
       }),
     });
     console.log(new Date().toISOString(), "notify", id, res.status);
