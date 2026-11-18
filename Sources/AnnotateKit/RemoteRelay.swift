@@ -1,3 +1,5 @@
+#if DEBUG && canImport(UIKit)
+
 // Remote delivery: the app uploads each session bundle to a relay on the internet, so an agent works
 // even when the phone isn't on the same Wi-Fi (cellular, different network, CI machine elsewhere).
 // Configured at launch, never compiled in:
@@ -193,3 +195,5 @@ public struct RemoteRelay: Sendable {
         return result
     }
 }
+
+#endif
